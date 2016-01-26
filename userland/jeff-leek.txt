@@ -1,0 +1,28 @@
+This is from the "Put your package on GitHub" section of:
+
+<https://github.com/jtleek/rpackages>
+
+
+All packages that are developed by the Leek group will be hosted on GitHub.
+The accounts are free and it makes it so much easier to share code/get other
+people to help you with your code. Here are the steps to getting your package
+on GitHub:
+
+Create a new Github repository with the same name (packagename)
+In the packagename directory on your local machine, run the commands: git init
+Then run: git remote add origin git@github.com:yourusername/packagename.git
+Create a file in the packagename directory called README.md
+Run the command: git add *
+Run the command: git commit -m 'initial commit'
+Run the command: git push -u origin master
+
+In summary:
+
+mkdir packagename
+cd packagename
+git init
+git remote add origin git@github.com:yourusername/packagename.git
+git add *
+git commit -m 'initial commit'
+git push -u origin master
+

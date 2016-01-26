@@ -1,0 +1,120 @@
+Greetings.  Just FYI, I've just signed in to:
+
+    git.openhazards.com
+
+(with one of my *many* OH passwords ;-).  There I did the following: I added
+the SSH key from my home computer to my profile, and then cloned one of the
+repositories on the git site.  There follows a lengthy elaboration of the
+process.  Some preliminary remarks:
+
+(1) The prerequisites for the following are:
+  (a) to have an ssh client installed on your system;
+  (b) to have used your ssh client to generate a public key;
+  (c) to have git installed:
+      https://git-scm.com/
+
+(2) It's easy (trivial on linux) to get the prerequisites, but I'm willing to
+help you get them.
+
+(3) There are many, many features of both ssh and git that I don't mention
+here.  James will likely cover some of them at one of the Spafford meetings.
+Fortunately, both ssh and git are in both in widespread use, and there is
+ample documentation for both.  Do web searches for:
+
+    ssh tutorial
+    git tutorial
+
+    ssh book
+    git book
+
+and pick something that suits you.
+
+# The SSH key:
+
+(1) Selected ("clicked on") the gear icon in the upper, right-hand corner of
+the page.
+
+(2) Selected "SSH Keys" from the resulting panel on the left-hand side of the
+page.
+
+(3) Selected the green, "Add SSH Key" in the upper, right-hand corner of the
+ensuing page.
+
+(4) Went to a "terminal" window on my computer and typed out my public key
+(RSA):
+
+    $ pwd
+    /home/mike/.ssh
+
+    $ cat id_rsa.pub
+
+(5) Used a mouse to copy the key (the output of the command in step (4)).
+
+(6) Pasted the key into the "key" box on the "Add SSH Key" page (selected in
+step (3)).
+
+(7) For the "Title" I just used the short name for my home PC.  I think the
+title is just for your own benefit -- anything you can remember.
+
+(8) Selected the green, "Add key" button at the bottom of the page.
+
+# Cloning the repository
+
+(1) Select the orange, "GitLab" icon in the upper, left-hand corner of any of
+the pages at:
+
+<http://git.openhazards.com/>
+
+(2) The repositories are evidently called "projects" in gitlab-speak.  I
+selected the:
+
+    ghojin/ghojin-py
+
+project from the list of projects near the upper, right-hand corner of the
+page.
+
+(3) There is a series of blue boxes on that page (the "Ghojin Market Simulator
+and Analysis Package" page.  Right *under* those blue boxes it shows two ways
+to clone the repository:
+
+    SSH
+    HTTP
+
+You just select the one you want to use.
+
+(4) I selected the SSH approach, as I had already added my own SSH key, so as
+to be able to access the repositories without a password.
+
+(5) I used the mouse to copy the string in the wide box next to the SSH and
+HTTP boxes:
+
+    git@git.openhazards.com:ghojin/ghojin-py.git
+
+(6) I proceeded to clone the repository:
+
+    $ git clone git@git.openhazards.com:ghojin/ghojin-py.git
+    Cloning into 'ghojin-py'...
+    remote: Counting objects: 111, done.
+    remote: Compressing objects: 100% (110/110), done.
+    remote: Total 111 (delta 59), reused 0 (delta 0)
+    Receiving objects: 100% (111/111), 19.33 KiB | 0 bytes/s, done.
+    Resolving deltas: 100% (59/59), done.
+    Checking connectivity... done.
+
+(7) Voici: I now have all the files from the repository on *my* computer:
+
+    $ cd ghojin-py/
+    $ ls
+    examples  ghojin  Makefile  pylint.rc  README.md
+
+(8) If somebody should add to/subtract from/modify the repository on the OH
+server, I can immediately get up-to-date copies, as:
+
+    $ git pull
+    Already up-to-date.
+
+(Evidently James is being lazy and hasn't modified anything in the last 15
+minutes.)
+
+-- Mike
+

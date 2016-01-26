@@ -1,0 +1,533 @@
+---
+title: A brief look at `git` internals
+author: Michael Hannon
+date: '`r Sys.Date()`'
+fontsize: 12pt
+output:
+  html_document:
+    theme: cosmo
+    fig_caption: true
+    toc: yes
+  pdf_document:
+    highlight: tango
+    fig_caption: true
+    toc: yes
+    pandoc_args: [
+      "--variable=geometry:margin=0.75in",
+      "--variable=fontsize=12pt"
+    ]
+---
+
+# A different perspective on `git`
+
+    Git is fundamentally a content-addressable filesystem with a VCS
+    user interface written on top of it.
+
+<https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain>
+
+## Plumbing and porcelain
+
+Two different types of commands:
+
+  - Plumbing (original and lower-level, oriented toward file system)
+  - Porcelain (newer and higher-level, oriented toward VCS)
+
+## Objects in `git`
+
+There are four kinds of objects that are fundamental to the workings
+of `git`:
+
+  - blob
+  - tree
+  - commit
+  - tag
+
+See, for instance:
+
+<http://www.gitguys.com/topics/all-git-object-types-blob-tree-commit-and-tag/>
+
+To explore the use of `git` at any level we need to have a repository
+to work with:
+
+# Set up and populate a repository
+
+## New repository
+
+First, make a new git repository:
+
+```{bash makeOrigRepos}
+
+if [ -d ~/test ]; then
+    \rm -rf ~/test
+fi
+
+mkdir ~/test
+cd ~/test
+
+git init
+
+```
+
+## Add some files
+
+Now add a couple of files to the new directory:
+
+```{bash createOrigFiles}
+
+cd ~/test
+
+cat <<EOF > firstFile
+
+Friends, Romans, countrymen, lend me your ears;
+I come to bury Caesar, not to praise him.
+
+EOF
+
+cat <<EOF > secondFile
+
+The evil that men do lives after them;
+The good is oft interred with their bones;
+
+EOF
+
+```
+
+## Move files to staging area and commit
+
+```{bash addAndCommit}
+
+cd ~/test
+git add *
+git commit -m "Initial commit -- two files about Julius"
+
+
+```
+
+# Explore the objects
+
+## The `HEAD` of the current branch
+
+We've done no branching, so we're currently on the `master` branch.
+Find the commit object that corresponds to the `HEAD` of this branch.
+
+```{bash bashFindHead}
+
+cd ~/test
+head_commit=`cat .git/HEAD`
+echo $head_commit
+cat .git/refs/heads/master
+
+```
+
+The `HEAD` of the branch is, in effect, a pointer to a file in a
+subdirectory of `.../objects/`.
+
+The subdirectory is just the first two characters of the SHA, and the
+name of the file is the remaining part of the SHA:
+
+## File corresponding to the `HEAD` commit
+
+Given the information just above, we can find the file associated with
+the `HEAD` commit:
+
+```{bash findSubAndFile}
+
+cd ~/test
+headSHA=`cat .git/refs/heads/master`
+echo -n "SHA of HEAD commit on master branch: "
+echo $headSHA
+
+subDir=${headSHA:0:2}
+echo -n "Name of subdirectory: "
+echo $subDir
+
+lenSHA=`expr length $headSHA`
+
+fileName=${headSHA:2:lenSHA}
+echo -n "File name: "
+echo $fileName
+
+echo "Directory listing for file:"
+ls -l .git/objects/$subDir/$filename
+
+```
+
+## Found the file.  Now what's in it?
+
+We can now use one of the `git` "plumbing" commands to examine the
+file we've just tracked down.  We first look at the `type` of the file
+we've found, then we look at the contents (via the `git` command):
+
+```{bash plumbing1, echo=9:12}
+
+cd ~/test
+headSHA=`cat .git/refs/heads/master`
+subDir=${headSHA:0:2}
+lenSHA=`expr length $headSHA`
+fileName=${headSHA:2:lenSHA}
+
+echo -n "File type: "
+git cat-file -t $headSHA
+
+echo -e "\nFile contents:"
+git cat-file -p $headSHA
+
+```
+
+## The `HEAD` points to another object, a `tree`
+
+Note from the output of `git cat-file -p ...` that the `commit` object
+for the `HEAD` of the `master` branch contains a pointer to *another*
+object of type `tree`.
+
+## Digression: other ways to look at `git` objects
+
+Before we examine that `tree` object, let's note that we can track
+down `git` objects using other utilities, including modules in
+`python` and the `zpipe` utility.
+
+Note that `git` uses the `zlib` utility to compress and decompress
+objects:
+
+<https://en.wikipedia.org/wiki/Zlib>
+
+(This uses the same compression algorithm as the `gzip` utility.)
+
+### Looking at `git` objects from `python`
+
+Hence, we can do the same compressing and decompressing in `python` (i.e.,
+just to show that we *can* do it) using the `zlib` module:
+
+<https://docs.python.org/2/library/zlib.html>
+
+Let's have a look.  The procedure is exactly analogous to the
+procedure we used above in the `bash` shell.
+
+
+```{python findHeadCommit}
+
+import os
+import subprocess as sp
+
+headSHA = sp.check_output(["cat", "/home/mike/test/.git/refs/heads/master"])
+headSHA = headSHA.strip('\n')
+
+subDir = headSHA[0:2]
+
+commitDir = "/home/mike/test/.git/objects/" + subDir + "/"
+commitObj = headSHA[2: ]
+commitFullPath = commitDir + commitObj
+
+import zlib
+
+fin = open(commitFullPath, 'r')
+zip_content = fin.read()
+commit_content = zlib.decompress(zip_content)
+
+commit_content = commit_content.translate(None, '\0')
+
+print(commit_content)
+
+```
+
+(We have to eliminate the `null` character ('\\0') in order to get the
+result to print correctly.)
+
+### Looking at `git` objects using `zpipe`
+
+Just to belabor the point a bit, note that *another* way to examine a
+`git` object is to use the `zpipe` utility, as:
+
+    zpipe -d <git-object>  >  <decompressed version of object>
+
+Here's an example and a comparison to the output of `git cat-file -p`:
+
+
+```{bash zpipeEx, echo=9:18}
+
+cd ~/test
+headSHA=`cat .git/refs/heads/master`
+subDir=${headSHA:0:2}
+lenSHA=`expr length $headSHA`
+fileName=${headSHA:2:lenSHA}
+
+cd .git/objects/${subDir}/
+zpipe -d < ${fileName} > zpipe.out
+echo -e "output from zpipe:\n"
+
+tr < zpipe.out -d '\000' > zpipe.out.no.null
+
+cat zpipe.out.no.null
+
+echo -e "\noutput from git cat-file:\n"
+ 
+git cat-file -p ${headSHA}
+
+```
+
+## Back to the `tree` object
+
+We've examined the commit object in three different ways, all of which
+indicated the existence of another object, a `tree` object.  Let's
+track that down and see what's in it.
+
+
+```{python findTree, echo=21:40}
+
+import os
+import subprocess as sp
+
+headSHA = sp.check_output(["cat", "/home/mike/test/.git/refs/heads/master"])
+headSHA = headSHA.strip('\n')
+
+subDir = headSHA[0:2]
+
+commitDir = "/home/mike/test/.git/objects/" + subDir + "/"
+commitObj = headSHA[2: ]
+commitFullPath = commitDir + commitObj
+
+import zlib
+
+fin = open(commitFullPath, 'r')
+zip_content = fin.read()
+commit_content = zlib.decompress(zip_content)
+
+commit_content = commit_content.translate(None, '\0')
+print("commit_content....: ")
+print(commit_content)
+
+tree_line = commit_content.split(' ')[2]
+print("tree_line....:")
+print(tree_line)
+
+tree_commit = tree_line.split('\n')[0]
+print("tree_commit....:")
+print(tree_commit)
+
+os.chdir("/home/mike/test")
+tree_content = sp.check_output(["git", "cat-file", "-p", tree_commit])
+print("tree_content....:")
+print(tree_content)
+
+tree_content = tree_content.rstrip('\n')
+tree_file_list = tree_content.split('\n')
+print("List of tree_file items....:")
+print(tree_file_list)
+
+def extract_file_info(tree_file_list_item):
+
+    
+    file_name  = tree_file_list_item.split('\t')[1]
+    other_info = tree_file_list_item.split('\t')[0]
+    file_hash  =  other_info.split(' ')[2]
+
+    return(file_name, file_hash)
+
+tree_file_info = map(extract_file_info, tree_file_list)
+print("\n List of (file_name, SHA_name) combinations in the tree....:")
+print(tree_file_info)
+
+
+```
+
+## Got the `tree` items -- keep digging
+
+We've now found a list of files that are associated with the `HEAD` of
+the current branch.  We've got a list of `(SHA_name,
+file_system_name`) combinations for all files pointed to by the
+current `HEAD` commit.
+
+As above, we can decode the contents of `SHA_name` by any of several
+ways:
+
+  - use the `git` "plumbing" command, `git cat-file -p SHA_name`
+  - use `zlib` in `python`
+  - use the `zpipe` utility
+
+Let's have a look.  We'll do this from within `python`, as we've
+already collected all the relevant information in `python`..
+
+```{python allFileContents, echo=40:69}
+
+import os
+import subprocess as sp
+
+headSHA = sp.check_output(["cat", "/home/mike/test/.git/refs/heads/master"])
+headSHA = headSHA.strip('\n')
+
+subDir = headSHA[0:2]
+
+commitDir = "/home/mike/test/.git/objects/" + subDir + "/"
+commitObj = headSHA[2: ]
+commitFullPath = commitDir + commitObj
+
+import zlib
+
+fin = open(commitFullPath, 'r')
+zip_content = fin.read()
+commit_content = zlib.decompress(zip_content)
+
+commit_content = commit_content.translate(None, '\0')
+
+tree_line = commit_content.split(' ')[2]
+
+tree_commit = tree_line.split('\n')[0]
+
+os.chdir("/home/mike/test")
+tree_content = sp.check_output(["git", "cat-file", "-p", tree_commit])
+tree_content = tree_content.rstrip('\n')
+tree_file_list = tree_content.split('\n')
+
+def extract_file_info(tree_file_list_item):
+    
+    file_name  = tree_file_list_item.split('\t')[1]
+    other_info = tree_file_list_item.split('\t')[0]
+    file_hash  =  other_info.split(' ')[2]
+
+    return(file_name, file_hash)
+
+tree_file_info = map(extract_file_info, tree_file_list)
+
+###### First with: git cat-file
+
+for (file_name, SHA_name) in tree_file_info:
+    print("File name (from git cat-file)....: " + file_name)
+    file_contents = sp.check_output(["git", "cat-file", "-p", SHA_name])
+    print("File contents (from git cat-file)....:")
+    print(file_contents)
+
+###### Now with zlib
+
+import zlib
+
+
+for (file_name, SHA_name) in tree_file_info:
+    subDir = SHA_name[0:2]
+    filesDir = "/home/mike/test/.git/objects/" + subDir + "/"
+    fileObj = SHA_name[2: ]
+    fileFullPath = filesDir + fileObj
+
+    fin = open(fileFullPath, 'r')
+    zip_content = fin.read()
+    file_contents = zlib.decompress(zip_content)
+
+    file_contents = file_contents.translate(None, '\0')
+
+    print("File contents (from python zlib)....:")
+    print(file_contents)
+
+
+
+```
+
+The additional information shown in the `zlib` version shows:
+
+  - The object type, namely, `blob`
+  - The number of characters in the original file, 92 and 84
+
+We can check that in the shell:
+
+```{bash countChars}
+
+cd ~/test
+ls
+
+echo ""
+
+wc *
+
+```
+
+## Recap so far
+
+The steps we've taken in the above are:
+
+  - found the `HEAD` commit
+  - decoded the file object associated with the `HEAD` commit
+  - followed the link from that file object to a `tree` object
+  - decoded the file object associated with the `tree` object
+  - followed the link from that file object to some `blob` objects
+  - decoded the `blob` objects to reproduce the original files from
+    our working directory
+
+
+# One more thing -- **make** the objects
+
+One final thing of interest is to explore how a `blob` file gets
+created in the first place.  I.e., starting from a regular file, say
+`firstFile`, how does it get transformed into a `blob`.
+
+We first have to create the `SHA1` "hash", then do the compressing.
+Both can be done with `python` modules, `hashlib` and `zlib`,
+respectively.  Here's an example:
+
+
+```{python makeBlob}
+
+import os
+os.chdir("/home/mike/test")
+
+fin = open("firstFile", 'r')
+content = fin.read()
+
+print("Original file content....:")
+print(content)
+
+header  = "blob {0}\0".format(len(content))
+print("Header that we created....:")
+print(repr(header))
+
+store = header + content
+
+import hashlib
+sha1 = hashlib.sha1()
+
+sha1.update(store)
+
+sha1_digest = sha1.hexdigest()
+print("\nSHA hexdigest that we created....:")
+print(sha1_digest)
+
+import zlib
+zlib_content = zlib.compress(store)
+
+fout = open("firstFile.blob.python", 'w')
+fout.write(zlib_content)
+
+fin.close()
+fout.close()
+
+######
+
+import subprocess as sp
+
+subDir = sha1_digest[0:2]
+
+blobDir = "/home/mike/test/.git/objects/" + subDir + "/"
+blobObj = sha1_digest[2: ]
+blobFullPath = blobDir + blobObj
+
+pythonBlobList = sp.check_output(["ls", "-l"])
+gitBlobList    = sp.check_output(["ls", "-l", blobFullPath])
+
+print("\nExamine the blob we just created in working directory....:")
+print(pythonBlobList)
+
+print("Examine the blob that git created in the .../objects dir....:")
+print(gitBlobList)
+
+```
+
+The two `blob` files have the same number of bytes, although they *do*
+differ in the second byte of the file (and *only* in that byte).  The
+`python` blob has the `ASCII` character `fs` ("file separator") at
+that position, while the `git` blob has the `ASCII` character `soh`
+("start of heading") at that position.
+
+I don't know the source of the discrepancy  -- maybe different
+versions of `zlib` or different options or ...?  In any case, it's
+clear that the `python` procedure is essentially equivalent to the
+procedure use by `git`.
+
+
+
